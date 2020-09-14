@@ -1,6 +1,6 @@
 import * as React from 'react';
 import * as d3 from 'd3';
-import { action, computed, comparer, flow } from 'mobx';
+import { action, computed, comparer, flow, runInAction } from 'mobx';
 import { observer } from 'mobx-react';
 import ElementContext from '../utils/ElementContext';
 import useCallbackRef from '../utils/useCallbackRef';
@@ -135,7 +135,7 @@ export const useDndDrag = <
                   typeof specRef.current.operation === 'function'
                     ? specRef.current.operation(monitor, propsRef.current)
                     : specRef.current.operation;
-                const updateOperation = async () => {
+                const updateOperation = action(async () => {
                   if (operation && idRef.current) {
                     const op = getOperation(operation);
                     if (dndManager.getOperation() !== op) {
@@ -156,36 +156,33 @@ export const useDndDrag = <
                         await dndManager.endDrag();
                       }
                       if (op && operationChangeEvents) {
-                        dndManager.beginDrag(idRef.current, op, ...operationChangeEvents.begin);
-                        dndManager.drag(...operationChangeEvents.drag);
-                        operationChangeEvents = undefined;
+                        runInAction(() => {
+                          dndManager.beginDrag(idRef.current, op, ...operationChangeEvents.begin);
+                          dndManager.drag(...operationChangeEvents.drag);
+                          operationChangeEvents = undefined;
+                        });
                       }
                     }
                   }
-                };
+                });
                 d3.select(node.ownerDocument)
                   .on(
                     'keydown.useDndDrag',
-                    flow(function*() {
+                    action(() => {
                       const e = d3.event as KeyboardEvent;
                       if (e.key === 'Escape') {
                         if (dndManager.isDragging() && dndManager.cancel()) {
                           operationChangeEvents = undefined;
                           d3.select(d3.event.view).on('.drag', null);
                           d3.select(node.ownerDocument).on('.useDndDrag', null);
-                          yield dndManager.endDrag();
+                          dndManager.endDrag();
                         }
                       } else {
-                        yield updateOperation();
+                        updateOperation();
                       }
                     })
                   )
-                  .on(
-                    'keyup.useDndDrag',
-                    flow(function*() {
-                      yield updateOperation();
-                    })
-                  );
+                  .on('keyup.useDndDrag', updateOperation);
               })
               .on(
                 'drag',
@@ -213,13 +210,13 @@ export const useDndDrag = <
               )
               .on(
                 'end',
-                flow(function*() {
+                action(() => {
                   operationChangeEvents = undefined;
                   operation = undefined;
                   d3.select(node.ownerDocument).on('.useDndDrag', null);
                   if (dndManager.isDragging()) {
                     dndManager.drop();
-                    yield dndManager.endDrag();
+                    dndManager.endDrag();
                   }
                 })
               )
@@ -227,7 +224,13 @@ export const useDndDrag = <
           );
         }
         return () => {
-          node && d3.select(node).on('mousedown.drag', null);
+          if (node) {
+            d3.select(node).on('mousedown.drag', null);
+            d3.select(node.ownerDocument).on('.useDndDrag', null);
+            if (dndManager.isDragging() && dndManager.getSourceId() === monitor.getHandlerId()) {
+              dndManager.endDrag();
+            }
+          }
         };
       },
       [dndManager, monitor]
