@@ -111,6 +111,7 @@ export const useDndDrag = <
   const refCallback: DragElementWrapper = useCallbackRef<DragElementWrapper>(
     React.useCallback(
       (node: SVGElement | Element | null) => {
+        const createKeyHandlerId = (event: string = '') => `${event}.useDndDrag-${monitor.getHandlerId()}`;
         if (node) {
           let operationChangeEvents:
             | {
@@ -167,14 +168,14 @@ export const useDndDrag = <
                 });
                 d3.select(node.ownerDocument)
                   .on(
-                    'keydown.useDndDrag',
+                    createKeyHandlerId('keydown'),
                     action(() => {
                       const e = d3.event as KeyboardEvent;
                       if (e.key === 'Escape') {
                         if (dndManager.isDragging() && dndManager.cancel()) {
                           operationChangeEvents = undefined;
-                          d3.select(d3.event.view).on('.drag', null);
-                          d3.select(node.ownerDocument).on('.useDndDrag', null);
+                          d3.select(node).on('.drag', null);
+                          d3.select(node.ownerDocument).on(createKeyHandlerId(), null);
                           dndManager.endDrag();
                         }
                       } else {
@@ -182,7 +183,7 @@ export const useDndDrag = <
                       }
                     })
                   )
-                  .on('keyup.useDndDrag', updateOperation);
+                  .on(createKeyHandlerId('keyup'), updateOperation);
               })
               .on(
                 'drag',
@@ -213,7 +214,7 @@ export const useDndDrag = <
                 action(() => {
                   operationChangeEvents = undefined;
                   operation = undefined;
-                  d3.select(node.ownerDocument).on('.useDndDrag', null);
+                  d3.select(node.ownerDocument).on(createKeyHandlerId(), null);
                   if (dndManager.isDragging()) {
                     dndManager.drop();
                     dndManager.endDrag();
@@ -226,7 +227,7 @@ export const useDndDrag = <
         return () => {
           if (node) {
             d3.select(node).on('mousedown.drag', null);
-            d3.select(node.ownerDocument).on('.useDndDrag', null);
+            d3.select(node.ownerDocument).on(createKeyHandlerId(), null);
             if (dndManager.isDragging() && dndManager.getSourceId() === monitor.getHandlerId()) {
               dndManager.endDrag();
             }
